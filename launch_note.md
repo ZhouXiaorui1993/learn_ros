@@ -59,7 +59,7 @@ launch文件的一般格式，参数：
         name="environment-variable-name"
         value="environment-variable-value"
         
-- <remap>  将参数名映射为另一个名字
+- <remap>  将参数名、node名或topic名映射为另一个名字
 
         from="original-name"
         to="new-name"
