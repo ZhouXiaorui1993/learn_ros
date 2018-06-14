@@ -281,6 +281,16 @@ $ cd ~/catkin_ws/
 $ catkin_make -DCATKIN_WHITELIST_PACKAGES="[package_name]"
 ```
 
+## 创建一个程序包
+
+- 切换到src目录下
+
+- 使用`catkin_create_pkg`命令创建一个名为'beginner_tutorials'的新程序包，这个程序包依赖于std_msgs、roscpp和rospy： 
+
+```
+$ catkin_create_pkg beginner_tutorials std_msgs rospy roscpp
+```
+
 ## 创建msg和srv
 
 msg文件就是一个描述ROS中所使用消息类型的简单文本，srv文件描述一项服务，包括请求和响应两个部分
