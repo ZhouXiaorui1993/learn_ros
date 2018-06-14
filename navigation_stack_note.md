@@ -149,9 +149,99 @@ geometry_msgs/Vector3 angular  # 角速度
     - 消息类型：geometry_msgs/PoseStamped
     - 说明：显示导航包视图到达的目标方位
 
-### 
+### 6.关于nav_msgs中的消息和服务
 
+#### 消息类型
 
+- GridCells 栅格单元 
+```
+std_msgs/Header header  # 消息头，时间戳和坐标系
+float32 cell_width  # 单元格的宽 
+float32 cell_height  # 高
+geometry_msgs/Point[] cells  # 单元格数组，存储单元格位置信息？
+```
+
+- MapMetaData  地图基本信息
+```
+time map_load_time  # 地图被加载的时间
+float32 resolution  # 地图分辨率（m/cell）
+uint32 width  # 地图的宽，单位是cell?
+uint32 height  # 地图的高
+geometry_msgs/Pose origin  # 地图的原点，即地图中的（0,0）单元格在真实世界中的位姿（m,m,rad)
+```
+
+- OccupancyGrid  2d栅格地图，其中每个单元格表示占用的概率
+```
+std_msgs/Header header
+MapMetaData info  # 地图的基本信息
+int8[] data  # 地图数据，依行排序，从(0,0)点开始。占用率的取值范围是[0,100]，未知为-1。
+```
+
+- Odometry  里程计（轮子编码器）消息，表示机器人内部的位姿和速度测量（估计）信息
+```
+std_msgs/Header header
+string child_frame_id  # 一般设为base_link或base_footprint
+geometry_msgs/PoseWithCovariance pose  # 位姿信息
+geometry_msgs/TwistWithCovariance twist  # 速度信息
+```
+
+- Path  用一个pose序列表示的路径信息
+```
+std/Header header
+geometry_msgs/PoseStamped[] poses  # 存储pose的数组
+```
+
+#### 服务类型
+
+- GetMap  接收地图
+```
+ # 不发送数据(调用服务无需发送数据)
+ ---
+ # 接收数据（调用后返回的数据）
+ nav_msgs/OccupancyGrid map
+```
+
+- GetPlan  得到一个从当前位置到目标位姿的路径规划
+```
+ # 发送数据
+ geometry_msgs/PoseStamped start  # 初始位姿
+ geometry_msgs/PoseStamped goal  # 目标位姿
+ float32 tolerance  # 如果不能到达目标，在失败前，规划器可以在x和y方向上放松的约束条件（m）（就近选取目标？）
+ ---
+ # 接收数据
+ nav_msgs/Path plan  # 规划的路径
+```
+
+- SetMap  # 创建一个带有初始位姿的新地图
+```
+ # 发送数据
+ nav_msgs/OccupancyGrid map
+ geometry_msgs/PoseWithCovarianceStamped initial_pose
+ ---
+ # 接收数据
+ bool success
+```
+
+#### action类型
+
+- GetMap.action
+```
+  # 定义一个目标，这里没有
+  ---
+  # define the result
+  nav_msgs/OccupancyGrid map
+  ---
+  # 没有feedback消息
+```
+### 7.关于坐标系的关系
+
+- map：地图坐标系，一般将其设为固定坐标系(fixed frame)，与机器人所在的世界坐标系一致
+
+- odom：里程计坐标系，从odom-->base_link之间的坐标变换，提供了机器人码盘内部的测量信息（位姿和速度）。
+    - 与/odom话题的区分：/odom话题上发布的数据仅仅是轮子编码器的数据，有时候如果机器人还有陀螺仪等传感器（可以对机器人的旋转进行额外的估算，与编码器数据合并处理，得到更加精确的位姿数据），则该话题上接收的数据将不是全部的内部测量数据。所以监听odom坐标系到base_link坐标系之间的坐标变换比只依赖/odom话题更安全。
+    - 关于odom和map之间的关系：在机器人的运动开始时，odom坐标系与map坐标系是重合的，但随着时间的推移，里程计会产生累积误差，两个坐标系也会出现偏差，map->odom的tf变换就是这个偏差。我们可以通过一些传感器（比如雷达）和package（gmapping等）合作校正获得一个位置估计，据此可以得到map-->base_link的tf变换。而这个位置估计和里程计位置估计之间的偏差就是odom和map之间的偏差了。
+
+- base_link：机器人本体坐标系。
 
 
 
