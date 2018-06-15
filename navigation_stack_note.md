@@ -233,6 +233,7 @@ geometry_msgs/PoseStamped[] poses  # 存储pose的数组
   ---
   # 没有feedback消息
 ```
+
 ### 7.关于坐标系的关系
 
 - map：地图坐标系，一般将其设为固定坐标系(fixed frame)，与机器人所在的世界坐标系一致
