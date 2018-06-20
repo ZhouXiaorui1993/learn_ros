@@ -245,6 +245,74 @@ geometry_msgs/PoseStamped[] poses  # 存储pose的数组
 - base_link：机器人本体坐标系。
 
 
+### 8.关于map_server
+
+map_server包提供了一个map_server节点，它通过ROS服务的方式提供地图数据。它还提供了map_saver命令行工具用于存储动态生成的地图。
+
+#### 地图格式
+
+- Image格式
+
+image文件用相应像素的颜色描述了地图上每个单元格的占用状态。在标准配置中，白色是未占用的，黑色是被占用的，灰色是未知的。可以使用彩色图像，但它们会被（平均）转化为灰度值。
+
+一般来说，大多数流行的文件格式都是支持的，但是在OS X系统上PNG格式不被支持。
+
+- Yaml文件
+
+yaml文件描述了地图的维度，其格式如下：
+
+```
+image: testmap.png  # 包含占有率数据的图形文件的路径，可以是绝对路径，也可以是相对路径（相对yaml文件）
+resolution: 0.1  # 地图的分辨率，m/pixel
+origin: [0.0, 0.0, 0.0]  # 地图左下像素的二维坐标，表示为（x,y,yaw），yaw为逆时针旋转的角度。（大多数系统会忽略旋转角）
+occupied_thresh: 0.65  # 占用率大于该值的，被认为是完全占据
+free_thresh: 0.196  # 占用率小于该值的，被认为是空闲
+negate: 0  # 是否将 白/黑 free/occupied 反向表示
+
+可选参数
+mode: trinary/scale/raw  # 默认值为trinary
+```
+
+- 给一个在[0,256]之间的灰度值x，图像单元的占用率的计算方法为：p = (255-x)/255（如果negate=0），这意味着黑色（灰度值为0）的占用率为1
+- trinary mode的解释：当p>occupied_thresh，则输出值为100，当p<free_thresh，则输出值为0，否则输出-1（表明该cell为未知）。
+- scale mode的解释：当p>occupied_thresh，则输出值为100，当p<free_thresh，则输出值为0，否则输出99*(p-free_thresh)/(occupied_thresh-free_thresh)，这将允许输出[0,100]范围内的完整梯度值。
+- raw mode的解释：直接输出x的值，所以输出范围为[0,255]。
+
+#### 命令行工具
+
+**map_server**
+
+- map_server 是一个ROS节点，可用来读取一张地图并将它提供给ROS service。
+```
+    rosrun map_server map_server
+```
+运行后，可以通过指定的topic来获取地图数据（意味着它可以发送给新的订阅者），也可以通过服务获取。
+
+- 发布的话题
+
+/map_metadata(nav_msgs/MapMetaData):可以通过这个话题接收地图元数据
+
+/map(Nav_msgs/OccupancyGrid)：可以通过此话题来接收地图数据
+
+- 服务
+
+static_map(Nav_msgs/OccupancyGrid)：可以通过此服务来接收地图
+
+
+**map_saver**
+
+- 用于存储一张来自SLAM建图service的地图。
+
+```
+    rosrun map_server map_saver -f mymap
+```
+- 订阅的话题
+
+map(nav_msgs/OccupancyGrid)
+
+### 9.关于costmap_2d
+
+
 
 
 
