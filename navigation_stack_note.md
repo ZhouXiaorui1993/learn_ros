@@ -85,6 +85,16 @@ geometry_msgs/Vector3 angular  # 角速度
     - 全局代价地图配置，global_costmap_params.yaml：包括代价地图应该运行的坐标系（一般设置为/map）、机器人基坐标系、代价地图更新频率以及是否是静态地图等参数。
     - 局部代价地图配置，local_costmap_params.yaml：包括global框架（一般设置为/odom）、机器人基坐标系、局部地图更新频率、代价地图发布可视化信息的频率、地图的宽、高和分辨率（一般设置为和静态地图相同）等信息。
     - 基本本地规划器配置，base_local_planner_params.yaml：包括速度和加速度限制等。
+    
+- 注意事项
+
+    - 对于local_costmap而言，local_planner要求的实时性较高，而局部代价地图所依赖的坐标系一般是odom，绘制local_costmap时需要反复获取odom->base_link的坐标变换，
+    tf数据的延迟会影响到costmap，进而影响planner的规划，使得机器人移动迟缓或撞上障碍物。所以要注意参数transform_tolerance的设置。
+    
+    - 如果使用静态地图做导航，则可以把全局的costmap选择使用static_map选项，这样会节省一些计算量
+    
+    - 如果采用动态地图（实时slam得到的）或根本不使用先验静态地图，则可以将全局的costmap所依赖的坐标系也改为odom，用rolling_window选项
+    替代static选项，这样costmap则会实时更新。此时要注意，上层程序给出的目标点不能超过rolling_window的范围。
  
 ### 5.使用Rviz可视化导航过程
 
@@ -167,7 +177,7 @@ time map_load_time  # 地图被加载的时间
 float32 resolution  # 地图分辨率（m/cell）
 uint32 width  # 地图的宽，单位是cell?
 uint32 height  # 地图的高
-geometry_msgs/Pose origin  # 地图的原点，即地图中的（0,0）单元格在真实世界中的位姿（m,m,rad)
+geometry_msgs/Pose origin  # 地图的原点，即地图中的（0,0）单元格在世界坐标系中的位姿（m,m,rad)
 ```
 
 - OccupancyGrid  2d栅格地图，其中每个单元格表示占用的概率
@@ -234,13 +244,74 @@ geometry_msgs/PoseStamped[] poses  # 存储pose的数组
   # 没有feedback消息
 ```
 
+### 7. 关于map_msgs
+
+#### 消息类型
+
+- OccupancyGridUpdates  
+```
+Header header
+int32 x  # 要更新的部分地图的原点（右下角）在map坐标系下的坐标
+int32 y
+uint32 width  # 要更新的部分地图的宽和高，单位是cell
+uint32 height  
+int8[] data  # 更新的地图代价数据
+```
+
+- PointCloud2Update
+```
+uint32 ADD=0
+uint32 DELETE=1
+Header header
+uint32 type          # type of update, one of ADD or DELETE
+sensor_msgs/PointCloud2 points
+```
+
+- ProjectedMap
+```
+nav_msgs/OccupancyGrid map
+float64 min_z
+float64 max_z
+```
+- ProjectedMapInfo
+```
+string frame_id
+float64 x
+float64 y
+float64 width
+float64 height
+float64 min_z
+float64 max_z
+```
+
+#### 服务类型
+
+- GetMapROI
+
+- GetPointMap
+
+- GetPointMapROI
+
+- ProjectedMapsInfo
+
+- SaveMap
+
+- SetMapProjection
+
 ### 7.关于坐标系的关系
 
-- map：地图坐标系，一般将其设为固定坐标系(fixed frame)，与机器人所在的世界坐标系一致
+- world：世界坐标系，在rviz中是grid的中心点，cell的大小表示每格代表的实际长度（单位是m）。
+
+- map：地图坐标系，一般将其设为固定坐标系(fixed frame)，地图yaml文件中的origin指的地图原点（左下角的点）在世界坐标系中的位置。
 
 - odom：里程计坐标系，从odom-->base_link之间的坐标变换，提供了机器人码盘内部的测量信息（位姿和速度）。
-    - 与/odom话题的区分：/odom话题上发布的数据仅仅是轮子编码器的数据，有时候如果机器人还有陀螺仪等传感器（可以对机器人的旋转进行额外的估算，与编码器数据合并处理，得到更加精确的位姿数据），则该话题上接收的数据将不是全部的内部测量数据。所以监听odom坐标系到base_link坐标系之间的坐标变换比只依赖/odom话题更安全。
-    - 关于odom和map之间的关系：在机器人的运动开始时，odom坐标系与map坐标系是重合的，但随着时间的推移，里程计会产生累积误差，两个坐标系也会出现偏差，map->odom的tf变换就是这个偏差。我们可以通过一些传感器（比如雷达）和package（gmapping等）合作校正获得一个位置估计，据此可以得到map-->base_link的tf变换。而这个位置估计和里程计位置估计之间的偏差就是odom和map之间的偏差了。
+    - 与/odom话题的区分：/odom话题上发布的数据仅仅是轮子编码器的数据，有时候如果机器人还有陀螺仪等传感器（可以对机器人的旋转进行额外的估算，与
+    编码器数据合并处理，得到更加精确的位姿数据），则该话题上接收的数据将不是全部的内部测量数据。所以监听odom坐标系到base_link坐标系之间的坐标变
+    换比只依赖/odom话题更安全。
+    
+    - 关于odom和map之间的关系：在机器人的运动开始时，odom坐标系与map坐标系是重合的，但随着时间的推移，里程计会产生累积误差，两个坐标系也会出现
+    偏差，map->odom的tf变换就是这个偏差。我们可以通过一些传感器（比如雷达）和package（gmapping等）合作校正获得一个位置估计，据此可以得到
+    map-->base_link的tf变换。而这个位置估计和里程计位置估计之间的偏差就是odom和map之间的偏差了。
 
 - base_link：机器人本体坐标系。
 
@@ -251,11 +322,8 @@ map_server包提供了一个map_server节点，它通过ROS服务的方式提供
 
 #### 地图格式
 
-- Image格式
-
-image文件用相应像素的颜色描述了地图上每个单元格的占用状态。在标准配置中，白色是未占用的，黑色是被占用的，灰色是未知的。可以使用彩色图像，但它们会被（平均）转化为灰度值。
-
-一般来说，大多数流行的文件格式都是支持的，但是在OS X系统上PNG格式不被支持。
+- Image格式  
+image文件用相应像素的颜色描述了地图上每个单元格的占用状态。在标准配置中，白色是未占用的，黑色是被占用的，灰色是未知的。可以使用彩色图像，但它们会被（平均）转化为灰度值。  一般来说，大多数流行的文件格式都是支持的，但是在OS X系统上PNG格式不被支持。
 
 - Yaml文件  
 yaml文件描述了地图的维度，其格式如下：
@@ -384,7 +452,8 @@ costmap_2d::Costmap2DROS对象为用户提供了一个纯二维接口，这意�
     可以通过插件增加其他的层结构  
 
     - 参考链接
-        - [链接1](https://blog.csdn.net/jinking01/article/details/79455962)
+        - 链接1：[详细介绍了costmap_2d](https://blog.csdn.net/jinking01/article/details/79455962)
+        - 链接2：[导航包介绍](http://blog.exbot.net/archives/1129)
  
 - 新建一个地图层
 
@@ -395,6 +464,71 @@ costmap_2d::Costmap2DROS对象为用户提供了一个纯二维接口，这意�
     - 参考链接3：[博客教程2](https://blog.csdn.net/x_r_su/article/details/53454368)
         
     
+### 10.关于导航包发布的一些话题
+
+- /amcl_pose
+    
+    - 发布者：amcl
+    
+    - 消息类型：geometry_msgs/PoseWithCovarianceStamped
+    
+    - 消息内容：机器人在世界坐标系下的位姿。
+    
+- /map
+
+    - 发布者：map_server
+    
+    - 消息类型：nav_msgs/OccupancyGrid
+    
+    - 消息内容：静态地图信息
+
+- /move_base/local_costmap/costmap
+
+    - 发布者：move_base
+    
+    - 消息类型：nav_msgs/OccupancyGrid
+    
+    - 消息内容：局部代价地图，和全局代价地图的width、height、resolution均一致，但其考虑的是机器人周围区域的障碍物信息。
+    
+- /move_base/local_costmap/costmap_updates
+
+    - 发布者：move_base
+    
+    - 消息类型：map_msgs/OccupancyGridUpdate
+    
+    - 消息内容：要更新的局部地图信息，(x,y)是局部地图原点（右下角）在map坐标系下的坐标
+    
+- /move_base/global_costmap/costmap
+
+    - 发布者：move_base
+    
+    - 消息类型：nav_msgs/OccupancyGrid
+    
+    - 消息内容：基于静态地图和局部地图信息，生成的全局代价地图（会随时间更新）
+    
+- /move_base/global_costmap/costmap_updates
+
+    - 发布者：move_base
+    
+    - 消息类型：map_msgs/OccupancyGridUpdate
+    
+    - 消息内容：要更新的全局代价地图信息（根据local costmap进行局部更新）
+    
+- /move_base/TrajectoryPlannerROS/global_plan
+
+    - 发布者：move_base
+    
+    - 消息类型：nav_msgs/Path
+    
+    - 消息内容：全局规划器规划出的全局路径
+
+- /move_base/TrajectoryPlannerROS/local_plan
+
+    - 发布者：move_base
+    
+    - 消息类型：nav_msgs/Path
+    
+    - 消息内容：局部规划器规划出的局部路径
 
 
 
