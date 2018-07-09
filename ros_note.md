@@ -278,7 +278,7 @@ $ source devel/setup.bash
 
 ```bash
 $ cd ~/catkin_ws/
-$ catkin_make -DCATKIN_WHITELIST_PACKAGES="[package_name]"
+$ catkin_make --pkg [package_name]
 ```
 
 ## 创建一个程序包
